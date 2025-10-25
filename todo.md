@@ -2,6 +2,8 @@ Create an LV2 Host for Windows using native Windows APIs and C++.
 Tasks:
 - Using the mingw-w64 toolchain for compilation.
 - Research LV2 specifications and requirements.
+- Use Lilv library for LV2 plugin handling.
+- I have added Lilv and its dependencies as a submodule in the project in the win32 directory.
 - Use Win32 API for window management and audio handling.
 - Implement plugin loading and management.
 - Test with various LV2 plugins to ensure compatibility.
