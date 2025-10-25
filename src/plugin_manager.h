@@ -1,6 +1,7 @@
 #ifndef PLUGIN_MANAGER_H
 #define PLUGIN_MANAGER_H
 
+#include <windows.h>
 #include <vector>
 #include <string>
 #include <memory>

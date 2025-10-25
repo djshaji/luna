@@ -20,7 +20,19 @@ bool PluginManager::Initialize() {
         if (!world) {
             return false;
         }
-        
+
+        char cwd[1024];
+        GetCurrentDirectoryA(sizeof(cwd), cwd);
+        std::string lv2Path = std::string(cwd) + "\\lv2";
+        LilvNode* lv2_path = lilv_new_file_uri(world, NULL, lv2Path.c_str());
+        lilv_world_set_option(world, LILV_OPTION_LV2_PATH, lv2_path);
+        lilv_node_free(lv2_path);
+        printf("LV2 Path set to: %s\n", lv2Path.c_str());
+
+        // Set the LV2 path option
+        // Set environment variable LV2_PATH
+        _putenv_s("LV2_PATH", lv2Path.c_str());
+
         // Load all installed LV2 plugins
         lilv_world_load_all(world);
         
@@ -67,6 +79,7 @@ void PluginManager::ScanPlugins() {
         // Get plugin URI
         const LilvNode* uri_node = lilv_plugin_get_uri(plugin);
         const char* uri_str = lilv_node_as_uri(uri_node);
+        printf("Found plugin URI: %s\n", uri_str ? uri_str : "Unknown");
         
         // Get plugin name
         LilvNode* name_node = lilv_plugin_get_name(plugin);
