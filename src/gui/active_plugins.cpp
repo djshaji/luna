@@ -62,11 +62,12 @@ bool ActivePlugins::Create(int x, int y, int width, int height) {
     );
     SendMessage(hClearAllButton, WM_SETFONT, (WPARAM)hButtonFont, TRUE);
     
-    // Create scrollable area for plugin cards
-    hScrollArea = CreateWindowW(
+    // Create scrollable area for plugin cards using proper container
+    hScrollArea = CreateWindowExW(
+        WS_EX_CLIENTEDGE,
         L"STATIC",
         nullptr,
-        WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
         x, y, width, height,
         hParent,
         nullptr,
@@ -78,9 +79,9 @@ bool ActivePlugins::Create(int x, int y, int width, int height) {
         return false;
     }
     
-    // Set background color for scroll area
-    SetClassLongPtr(hScrollArea, GCLP_HBRBACKGROUND, 
-                   reinterpret_cast<LONG_PTR>(CreateSolidBrush(RGB(250, 250, 250))));
+    // Subclass the scroll area to handle WM_COMMAND messages from buttons
+    originalScrollProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(hScrollArea, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ScrollProc)));
+    SetWindowLongPtr(hScrollArea, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
     
     RefreshDisplay();
     return true;
@@ -152,10 +153,12 @@ void ActivePlugins::BypassPlugin(int index, bool bypass) {
     if (index >= 0 && index < static_cast<int>(activePlugins.size())) {
         activePlugins[index].bypassed = bypass;
         
-        // Update bypass button text
+        // Update bypass button text and state
         if (activePlugins[index].hBypassButton) {
             const wchar_t* text = bypass ? L"🔇 Bypassed" : L"🔊 Active";
             SetWindowText(activePlugins[index].hBypassButton, text);
+            // Set the check state of the toggle button
+            SendMessage(activePlugins[index].hBypassButton, BM_SETCHECK, bypass ? BST_CHECKED : BST_UNCHECKED, 0);
         }
         
         std::cout << (bypass ? "Bypassed" : "Activated") << " plugin: " 
@@ -217,9 +220,28 @@ void ActivePlugins::RefreshDisplay() {
     if (activePlugins.empty()) {
         // Show empty state message in scroll area
         InvalidateRect(hScrollArea, nullptr, TRUE);
+        UpdateWindow(hScrollArea);
     } else {
         LayoutCards();
     }
+    
+    // Ensure the parent window redraws this area
+    if (hParent) {
+        RECT rect = {containerX, containerY, containerX + containerWidth, containerY + containerHeight};
+        InvalidateRect(hParent, &rect, FALSE);
+    }
+}
+
+static LRESULT CALLBACK CardProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    if (uMsg == WM_COMMAND) {
+        // Forward command messages to the scroll area, which will forward to main window
+        HWND hParent = GetParent(hWnd);
+        if (hParent) {
+            std::cout << "CardProc: Forwarding WM_COMMAND ID " << LOWORD(wParam) << " to scroll area" << std::endl;
+            return SendMessage(hParent, WM_COMMAND, wParam, lParam);
+        }
+    }
+    return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
 void ActivePlugins::CreatePluginCard(PluginCard& card, int cardIndex) {
@@ -228,17 +250,25 @@ void ActivePlugins::CreatePluginCard(PluginCard& card, int cardIndex) {
     int cardY = cardIndex * (CARD_HEIGHT + CARD_SPACING) + CARD_MARGIN;
     int cardWidth = containerWidth - (2 * CARD_MARGIN) - 20; // Account for scrollbar
     
-    // Create card background
-    card.hCard = CreateWindowW(
+    // Create card background with proper styles
+    card.hCard = CreateWindowExW(
+        0,
         L"STATIC",
         nullptr,
-        WS_CHILD | WS_VISIBLE | SS_WHITERECT,
+        WS_CHILD | WS_VISIBLE | SS_NOTIFY | WS_CLIPCHILDREN,
         CARD_MARGIN, cardY, cardWidth, CARD_HEIGHT,
         hScrollArea,
-        nullptr,
+        reinterpret_cast<HMENU>(3100 + cardIndex), // Unique ID for card
         hInstance,
         nullptr
     );
+    
+    // Set white background for the card
+    SetClassLongPtr(card.hCard, GCLP_HBRBACKGROUND, 
+                   reinterpret_cast<LONG_PTR>(CreateSolidBrush(RGB(255, 255, 255))));
+    
+    // Subclass the card to handle WM_COMMAND messages from child buttons
+    SetWindowLongPtr(card.hCard, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(CardProc));
     
     // Create plugin title
     std::wstring title = L"🎚️ ";
@@ -269,11 +299,11 @@ void ActivePlugins::CreatePluginCard(PluginCard& card, int cardIndex) {
     );
     SendMessage(card.hTitleLabel, WM_SETFONT, (WPARAM)hTitleFont, TRUE);
     
-    // Create bypass button
+    // Create bypass button as toggle
     card.hBypassButton = CreateWindowW(
         L"BUTTON",
         L"🔊 Active",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
         cardWidth - 180, 8, 80, 24,
         card.hCard,
         reinterpret_cast<HMENU>(4000 + cardIndex * 100 + 1), // Unique ID
@@ -402,22 +432,44 @@ void ActivePlugins::LayoutCards() {
     si.nPage = containerHeight;
     SetScrollInfo(hScrollArea, SB_VERT, &si, TRUE);
     
-    // Position all cards
+    // Position all cards and ensure proper redraw
     for (size_t i = 0; i < activePlugins.size(); ++i) {
         PluginCard& card = activePlugins[i];
         if (card.hCard) {
             int cardY = static_cast<int>(i) * (CARD_HEIGHT + CARD_SPACING) + CARD_MARGIN;
             int cardWidth = containerWidth - (2 * CARD_MARGIN) - 20;
             
-            SetWindowPos(card.hCard, nullptr, CARD_MARGIN, cardY, cardWidth, CARD_HEIGHT, SWP_NOZORDER);
+            SetWindowPos(card.hCard, nullptr, CARD_MARGIN, cardY, cardWidth, CARD_HEIGHT, 
+                        SWP_NOZORDER | SWP_NOACTIVATE);
+            
+            // Force redraw of the card to prevent artifacts
+            InvalidateRect(card.hCard, nullptr, TRUE);
+            UpdateWindow(card.hCard);
         }
     }
+    
+    // Force redraw of the scroll area
+    InvalidateRect(hScrollArea, nullptr, TRUE);
 }
 
 LRESULT CALLBACK ActivePlugins::ScrollProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     ActivePlugins* pThis = reinterpret_cast<ActivePlugins*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
     
     switch (uMsg) {
+        case WM_COMMAND: {
+            // Forward button commands to the main window
+            if (pThis) {
+                int controlId = LOWORD(wParam);
+                int notification = HIWORD(wParam);
+                std::cout << "ScrollProc: Received WM_COMMAND ID " << controlId << ", notification " << notification << std::endl;
+                
+                // Forward to parent window (main window)
+                LRESULT result = SendMessage(pThis->hParent, WM_COMMAND, wParam, lParam);
+                std::cout << "ScrollProc: Forwarded to parent, result: " << result << std::endl;
+                return result;
+            }
+            break;
+        }
         case WM_VSCROLL: {
             SCROLLINFO si = {};
             si.cbSize = sizeof(SCROLLINFO);
@@ -454,6 +506,14 @@ LRESULT CALLBACK ActivePlugins::ScrollProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
             return 0;
         }
         
+        case WM_CTLCOLORBTN:
+        case WM_CTLCOLORSTATIC: {
+            // Ensure proper colors for child controls
+            HDC hdc = (HDC)wParam;
+            SetBkMode(hdc, TRANSPARENT);
+            return (LRESULT)GetStockObject(WHITE_BRUSH);
+        }
+        
         case WM_PAINT: {
             if (pThis && pThis->activePlugins.empty()) {
                 PAINTSTRUCT ps;
@@ -463,8 +523,11 @@ LRESULT CALLBACK ActivePlugins::ScrollProc(HWND hWnd, UINT uMsg, WPARAM wParam, 
                 RECT rect;
                 GetClientRect(hWnd, &rect);
                 
+                // Fill background
+                FillRect(hdc, &rect, (HBRUSH)GetStockObject(WHITE_BRUSH));
+                
                 SetTextColor(hdc, RGB(128, 128, 128));
-                SetBkColor(hdc, RGB(250, 250, 250));
+                SetBkMode(hdc, TRANSPARENT);
                 
                 DrawText(hdc, L"🎛️ No plugins in chain\n\nDouble-click plugins from the list\nto add them as cards with controls", 
                         -1, &rect, DT_CENTER | DT_VCENTER | DT_WORDBREAK);

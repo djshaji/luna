@@ -305,6 +305,14 @@ void MainWindow::OnCommand(WPARAM wParam, LPARAM lParam) {
     int id = LOWORD(wParam);
     int notification = HIWORD(wParam);
     
+    // Debug: Log all command messages
+    if (id >= 4000) {
+        std::cout << "OnCommand - Plugin Control ID: " << id << ", Notification: " << notification << std::endl;
+    }
+    
+    // Debug: Log all button clicks
+    std::cout << "OnCommand called - ID: " << id << ", Notification: " << notification << std::endl;
+    
     switch (id) {
         case ID_AUDIO_TOGGLE:
             ToggleAudio();
@@ -402,8 +410,9 @@ void MainWindow::HandlePluginCardControl(int controlId, int notification) {
         int buttonType = (controlId - 4000) % 100;
         
         switch (buttonType) {
-            case 1: // Bypass button
+            case 1: // Bypass button (toggle)
                 if (notification == BN_CLICKED) {
+                    std::cout << "Bypass button clicked for card " << cardIndex << std::endl;
                     // Toggle bypass state
                     bool currentlyBypassed = false;
                     if (cardIndex < static_cast<int>(activePlugins->GetPluginCount())) {
@@ -426,6 +435,7 @@ void MainWindow::HandlePluginCardControl(int controlId, int notification) {
                 
             case 2: // Remove button
                 if (notification == BN_CLICKED) {
+                    std::cout << "Remove button clicked for card " << cardIndex << std::endl;
                     if (cardIndex < static_cast<int>(activePlugins->GetPluginCount())) {
                         const std::string& name = activePlugins->GetPlugins()[cardIndex].plugin.name;
                         activePlugins->RemovePlugin(cardIndex);
