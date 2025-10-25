@@ -64,10 +64,16 @@ install: $(BUILD_DIR)/$(TARGET)
 
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -rf $(INSTALL_DIR)
+# 	rm -rf $(INSTALL_DIR)
 
 # Development targets
 dev: CXXFLAGS += -g -DDEBUG
 dev: all
+
+# Console version for debugging
+console: LDFLAGS = -static-libgcc -static-libstdc++ -Wl,--subsystem,console
+console: CXXFLAGS += -g -DDEBUG -DCONSOLE_APP
+console: TARGET = luna_console.exe
+console: directories $(BUILD_DIR)/$(TARGET)
 
 .SUFFIXES: .cpp .o

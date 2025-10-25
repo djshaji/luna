@@ -1,0 +1,7 @@
+./build/gui/main_window.o
+./build/gui/plugin_list.o
+./build/gui/controls.o
+./build/main.o
+./build/audio_engine.o
+./build/plugin_manager.o
+./build/lv2_host.o

@@ -2,6 +2,7 @@
 #include "../lv2_host.h"
 #include "plugin_list.h"
 #include <commctrl.h>
+#include <iostream>
 
 const wchar_t* MainWindow::CLASS_NAME = L"LunaLV2Host";
 
@@ -18,6 +19,8 @@ MainWindow::~MainWindow() {
 }
 
 bool MainWindow::Create() {
+    std::cout << "Registering window class..." << std::endl;
+    
     // Register window class
     WNDCLASS wc = {};
     wc.lpfnWndProc = WindowProc;
@@ -28,10 +31,19 @@ bool MainWindow::Create() {
     wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
     
     if (!RegisterClass(&wc)) {
-        return false;
+        // Check if the class is already registered (this is okay)
+        DWORD error = GetLastError();
+        std::cout << "RegisterClass failed with error: " << error << std::endl;
+        if (error != ERROR_CLASS_ALREADY_EXISTS) {
+            return false;
+        }
+        std::cout << "Window class already exists, continuing..." << std::endl;
+    } else {
+        std::cout << "Window class registered successfully" << std::endl;
     }
     
     // Create window
+    std::cout << "Creating window with CreateWindowEx..." << std::endl;
     hWnd = CreateWindowEx(
         0,
         CLASS_NAME,
@@ -46,17 +58,28 @@ bool MainWindow::Create() {
     );
     
     if (!hWnd) {
+        DWORD error = GetLastError();
+        std::cout << "CreateWindowEx failed with error: " << error << std::endl;
+        wchar_t errorMsg[512];
+        swprintf(errorMsg, 512, L"CreateWindowEx failed. Error code: %lu", error);
+        MessageBox(nullptr, errorMsg, L"Window Creation Error", MB_OK | MB_ICONERROR);
         return false;
     }
     
-    // Initialize LV2 host
-    if (!lv2Host->Initialize()) {
-        MessageBox(hWnd, L"Failed to initialize LV2 host", L"Error", MB_OK | MB_ICONERROR);
-        return false;
-    }
+    std::cout << "Window created successfully" << std::endl;
+    
+    // Initialize LV2 host (non-blocking - allow window to show even if this fails)
+    bool lv2InitSuccess = lv2Host->Initialize();
     
     CreateControls();
-    UpdateStatus(L"Ready - LV2 Host initialized");
+    
+    if (lv2InitSuccess) {
+        UpdateStatus(L"Ready - LV2 Host initialized");
+    } else {
+        UpdateStatus(L"Warning: LV2 Host initialization failed");
+        MessageBox(hWnd, L"LV2 Host initialization failed. Some features may not work.", L"Warning", MB_OK | MB_ICONWARNING);
+    }
+    
     return true;
 }
 

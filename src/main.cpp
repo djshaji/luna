@@ -7,18 +7,34 @@
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow) {
     
     try {
+        // Allocate console for debugging (will be ignored if not running from console)
+        AllocConsole();
+        freopen_s((FILE**)stdout, "CONOUT$", "w", stdout);
+        freopen_s((FILE**)stderr, "CONOUT$", "w", stderr);
+        
+        std::cout << "Luna LV2 Host starting..." << std::endl;
+        
         // Initialize COM
         CoInitialize(nullptr);
+        std::cout << "COM initialized" << std::endl;
         
         // Create the main window
+        std::cout << "Creating main window..." << std::endl;
         MainWindow mainWindow(hInstance);
         if (!mainWindow.Create()) {
-            MessageBox(nullptr, L"Failed to create main window", L"Error", MB_OK | MB_ICONERROR);
+            DWORD error = GetLastError();
+            std::cout << "Failed to create main window. Error code: " << error << std::endl;
+            wchar_t errorMsg[512];
+            swprintf(errorMsg, 512, L"Failed to create main window. Error code: %lu", error);
+            MessageBox(nullptr, errorMsg, L"Error", MB_OK | MB_ICONERROR);
             CoUninitialize();
             return -1;
         }
         
+        std::cout << "Main window created successfully" << std::endl;
+        
         // Show the window
+        std::cout << "Showing window..." << std::endl;
         mainWindow.Show(nCmdShow);
         
         // Message loop

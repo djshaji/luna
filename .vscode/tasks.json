@@ -12,6 +12,18 @@
 				"$gcc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "Build Luna LV2 Host",
+			"type": "shell",
+			"command": "make",
+			"args": [
+				"all"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
 		}
 	]
 }
