@@ -29,6 +29,8 @@ private:
     
     HINSTANCE hInstance;
     HWND hWnd;
+    HWND hTitleLabel;
+    HWND hHeaderSeparator;
     HWND hAudioToggle;
     HWND hStatusBar;
     

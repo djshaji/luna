@@ -7,7 +7,7 @@
 const wchar_t* MainWindow::CLASS_NAME = L"LunaLV2Host";
 
 MainWindow::MainWindow(HINSTANCE hInstance) 
-    : hInstance(hInstance), hWnd(nullptr), hAudioToggle(nullptr), hStatusBar(nullptr) {
+    : hInstance(hInstance), hWnd(nullptr), hTitleLabel(nullptr), hHeaderSeparator(nullptr), hAudioToggle(nullptr), hStatusBar(nullptr) {
     
     lv2Host = std::make_unique<LV2Host>();
 }
@@ -27,15 +27,15 @@ bool MainWindow::Create() {
         return false;
     }
     
-    // Register window class using explicit Unicode version
+    // Register window class using explicit Unicode version with modern styling
     WNDCLASSW wc = {};
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = CLASS_NAME;
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hbrBackground = CreateSolidBrush(RGB(240, 240, 240)); // Modern light gray background
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
-    wc.style = CS_HREDRAW | CS_VREDRAW; // Add standard class styles
+    wc.style = CS_HREDRAW | CS_VREDRAW | CS_DROPSHADOW; // Add drop shadow for modern look
     
     if (!RegisterClassW(&wc)) {
         // Check if the class is already registered (this is okay)
@@ -66,14 +66,14 @@ bool MainWindow::Create() {
     SetLastError(0);
     
     hWnd = CreateWindowExW(
-        0,                          // dwExStyle
+        WS_EX_LAYERED | WS_EX_COMPOSITED, // Modern extended styles for smooth rendering
         CLASS_NAME,                 // lpClassName
         L"Luna LV2 Host",          // lpWindowName
-        WS_OVERLAPPEDWINDOW,       // dwStyle
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, // Add WS_CLIPCHILDREN for better child control rendering
         CW_USEDEFAULT,             // X
         CW_USEDEFAULT,             // Y
-        1024,                      // nWidth
-        768,                       // nHeight
+        1200,                      // nWidth - slightly larger for modern layout
+        800,                       // nHeight
         nullptr,                   // hWndParent
         nullptr,                   // hMenu
         hInstance,                 // hInstance
@@ -110,6 +110,9 @@ bool MainWindow::Create() {
     
     // Set up window user data manually since we didn't pass 'this' in CreateWindowEx
     SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+    
+    // Apply modern window effects
+    SetLayeredWindowAttributes(hWnd, 0, 250, LWA_ALPHA); // Slight transparency for modern look
     
     // Initialize LV2 host (non-blocking - allow window to show even if this fails)
     bool lv2InitSuccess = lv2Host->Initialize();
@@ -154,6 +157,19 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             OnCommand(wParam, lParam);
             return 0;
             
+        case WM_CTLCOLORSTATIC: {
+            HDC hdc = (HDC)wParam;
+            HWND hwndStatic = (HWND)lParam;
+            
+            if (hwndStatic == hTitleLabel) {
+                // Modern title styling
+                SetTextColor(hdc, RGB(32, 32, 32)); // Dark gray text
+                SetBkColor(hdc, RGB(240, 240, 240)); // Light background
+                return (LRESULT)CreateSolidBrush(RGB(240, 240, 240));
+            }
+            break;
+        }
+            
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -166,26 +182,68 @@ void MainWindow::CreateControls() {
     // Initialize common controls
     INITCOMMONCONTROLSEX icc = {};
     icc.dwSize = sizeof(icc);
-    icc.dwICC = ICC_BAR_CLASSES;
+    icc.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
     InitCommonControlsEx(&icc);
     
-    // Create audio toggle button
-    hAudioToggle = CreateWindow(
+    // Create title label in header area with modern styling
+    hTitleLabel = CreateWindowW(
+        L"STATIC",
+        L"🎵 Luna LV2 Host - Digital Audio Workstation",
+        WS_VISIBLE | WS_CHILD | SS_LEFT | SS_CENTERIMAGE,
+        20, 15, 400, 25,
+        hWnd,
+        nullptr,
+        hInstance,
+        nullptr
+    );
+    
+    // Set modern font for title
+    HFONT hTitleFont = CreateFontW(
+        18, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI"
+    );
+    SendMessage(hTitleLabel, WM_SETFONT, (WPARAM)hTitleFont, TRUE);
+    
+    // Create header separator line
+    hHeaderSeparator = CreateWindowW(
+        L"STATIC",
+        nullptr,
+        WS_VISIBLE | WS_CHILD | SS_ETCHEDHORZ,
+        0, 50, 1200, 2,
+        hWnd,
+        nullptr,
+        hInstance,
+        nullptr
+    );
+    
+    // Create modern styled audio toggle button
+    hAudioToggle = CreateWindowW(
         L"BUTTON",
-        L"Start Audio",
-        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-        10, 10, 100, 30,
+        L"▶ Start Audio",
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON | BS_FLAT,
+        850, 12, 120, 32,
         hWnd,
         reinterpret_cast<HMENU>(ID_AUDIO_TOGGLE),
         hInstance,
         nullptr
     );
     
-    // Create status bar
-    hStatusBar = CreateWindow(
+    // Set modern font for button
+    HFONT hButtonFont = CreateFontW(
+        14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI"
+    );
+    SendMessage(hAudioToggle, WM_SETFONT, (WPARAM)hButtonFont, TRUE);
+    
+    // Create modern status bar
+    hStatusBar = CreateWindowW(
         STATUSCLASSNAME,
         nullptr,
-        WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
+        WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP | CCS_BOTTOM,
         0, 0, 0, 0,
         hWnd,
         nullptr,
@@ -193,9 +251,9 @@ void MainWindow::CreateControls() {
         nullptr
     );
     
-    // Create plugin list
+    // Create plugin list with modern positioning
     pluginList = std::make_unique<PluginList>(hWnd, hInstance);
-    pluginList->Create(10, 50, 200, 500);
+    pluginList->Create(20, 60, 250, 680); // Adjusted for header space
     
     // Refresh plugin list
     if (lv2Host && lv2Host->GetPluginManager()) {
@@ -204,14 +262,29 @@ void MainWindow::CreateControls() {
 }
 
 void MainWindow::OnSize(int width, int height) {
+    // Resize and reposition title label
+    if (hTitleLabel) {
+        SetWindowPos(hTitleLabel, nullptr, 20, 15, width - 200, 25, SWP_NOZORDER);
+    }
+    
+    // Resize header separator line
+    if (hHeaderSeparator) {
+        SetWindowPos(hHeaderSeparator, nullptr, 0, 50, width, 2, SWP_NOZORDER);
+    }
+    
+    // Reposition audio toggle button to right side
+    if (hAudioToggle) {
+        SetWindowPos(hAudioToggle, nullptr, width - 140, 12, 120, 32, SWP_NOZORDER);
+    }
+    
     // Resize status bar
     if (hStatusBar) {
         SendMessage(hStatusBar, WM_SIZE, 0, 0);
     }
     
-    // Resize plugin list
+    // Resize plugin list with modern spacing
     if (pluginList) {
-        pluginList->Resize(10, 50, 200, height - 100);
+        pluginList->Resize(20, 60, 250, height - 120);
     }
 }
 
@@ -243,7 +316,7 @@ void MainWindow::ToggleAudio() {
 
 void MainWindow::UpdateAudioButton() {
     if (hAudioToggle) {
-        const wchar_t* text = lv2Host->IsAudioRunning() ? L"Stop Audio" : L"Start Audio";
+        const wchar_t* text = lv2Host->IsAudioRunning() ? L"⏹ Stop Audio" : L"▶ Start Audio";
         SetWindowText(hAudioToggle, text);
     }
 }
