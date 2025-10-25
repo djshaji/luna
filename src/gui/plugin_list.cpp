@@ -10,13 +10,34 @@ PluginList::~PluginList() {
 }
 
 bool PluginList::Create(int x, int y, int width, int height) {
+    // Create title label for plugin list
+    HWND hTitleLabel = CreateWindowW(
+        L"STATIC",
+        L"🔌 Available LV2 Plugins",
+        WS_VISIBLE | WS_CHILD | SS_LEFT | SS_CENTERIMAGE,
+        x, y - 25, width, 20,
+        hParent,
+        nullptr,
+        hInstance,
+        nullptr
+    );
+    
+    // Set modern font for title
+    HFONT hTitleFont = CreateFontW(
+        14, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
+        L"Segoe UI"
+    );
+    SendMessage(hTitleLabel, WM_SETFONT, (WPARAM)hTitleFont, TRUE);
+    
     hListBox = CreateWindow(
         L"LISTBOX",
         nullptr,
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | LBS_NOTIFY,
         x, y, width, height,
         hParent,
-        nullptr,
+        reinterpret_cast<HMENU>(2000), // ID_PLUGIN_LIST
         hInstance,
         nullptr
     );

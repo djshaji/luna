@@ -95,6 +95,20 @@ void PluginManager::ScanPlugins() {
         info.name = name_str ? name_str : "Unknown Plugin";
         info.bundle_path = bundle_str ? bundle_str : "";
         
+        // Add some default parameters for demo (simplified implementation)
+        for (int i = 0; i < 4; ++i) {
+            PluginParameter param;
+            param.name = "Param " + std::to_string(i + 1);
+            param.symbol = "param" + std::to_string(i + 1);
+            param.min_value = 0.0f;
+            param.max_value = 100.0f;
+            param.default_value = 50.0f;
+            param.current_value = 50.0f;
+            param.is_input = true;
+            param.is_control = true;
+            info.parameters.push_back(param);
+        }
+        
         pluginList.push_back(info);
         
         // Free the name node

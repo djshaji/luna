@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "../lv2_host.h"
 #include "plugin_list.h"
+#include "active_plugins.h"
 #include <commctrl.h>
 #include <iostream>
 
@@ -251,9 +252,13 @@ void MainWindow::CreateControls() {
         nullptr
     );
     
-    // Create plugin list with modern positioning
+    // Create plugin list - left panel
     pluginList = std::make_unique<PluginList>(hWnd, hInstance);
-    pluginList->Create(20, 60, 250, 680); // Adjusted for header space
+    pluginList->Create(20, 90, 350, 650); // Wider for better visibility
+    
+    // Create active plugins panel - right panel with plugin cards
+    activePlugins = std::make_unique<ActivePlugins>(hWnd, hInstance);
+    activePlugins->Create(390, 90, 780, 650); // Takes remaining space
     
     // Refresh plugin list
     if (lv2Host && lv2Host->GetPluginManager()) {
@@ -282,18 +287,47 @@ void MainWindow::OnSize(int width, int height) {
         SendMessage(hStatusBar, WM_SIZE, 0, 0);
     }
     
-    // Resize plugin list with modern spacing
+    // Resize plugin list - left panel (30% of width)
+    int leftPanelWidth = (width * 30) / 100;
     if (pluginList) {
-        pluginList->Resize(20, 60, 250, height - 120);
+        pluginList->Resize(20, 90, leftPanelWidth - 30, height - 150);
+    }
+    
+    // Resize active plugins panel - right panel (70% of width)
+    int rightPanelX = leftPanelWidth + 10;
+    int rightPanelWidth = width - rightPanelX - 20;
+    if (activePlugins) {
+        activePlugins->Resize(rightPanelX, 90, rightPanelWidth, height - 150);
     }
 }
 
-void MainWindow::OnCommand(WPARAM wParam, LPARAM) {
+void MainWindow::OnCommand(WPARAM wParam, LPARAM lParam) {
     int id = LOWORD(wParam);
+    int notification = HIWORD(wParam);
     
     switch (id) {
         case ID_AUDIO_TOGGLE:
             ToggleAudio();
+            break;
+            
+        case ID_PLUGIN_LIST:
+            if (notification == LBN_DBLCLK) {
+                OnPluginListDoubleClick();
+            }
+            break;
+            
+        case ID_CLEAR_ALL:
+            if (activePlugins) {
+                activePlugins->ClearAll();
+                UpdateStatus(L"Cleared all plugins from active chain");
+            }
+            break;
+            
+        default:
+            // Handle plugin card controls (bypass, remove, sliders)
+            if (id >= 4000 && id < 6000) {
+                HandlePluginCardControl(id, notification);
+            }
             break;
     }
 }
@@ -324,5 +358,111 @@ void MainWindow::UpdateAudioButton() {
 void MainWindow::UpdateStatus(const wchar_t* message) {
     if (hStatusBar) {
         SendMessage(hStatusBar, SB_SETTEXT, 0, reinterpret_cast<LPARAM>(message));
+    }
+}
+
+void MainWindow::OnPluginListDoubleClick() {
+    if (!pluginList || !activePlugins || !lv2Host || !lv2Host->GetPluginManager()) {
+        return;
+    }
+    
+    // Get selected plugin from the list
+    HWND hListBox = pluginList->GetHandle();
+    int sel = static_cast<int>(SendMessage(hListBox, LB_GETCURSEL, 0, 0));
+    
+    if (sel != LB_ERR) {
+        auto plugins = lv2Host->GetPluginManager()->GetPluginList();
+        if (sel >= 0 && sel < static_cast<int>(plugins.size())) {
+            // Add plugin as a card to active plugins
+            activePlugins->AddPlugin(plugins[sel]);
+            
+            // Update status
+            std::wstring statusMsg = L"Added plugin card: ";
+            const std::string& name = plugins[sel].name;
+            int len = MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, nullptr, 0);
+            if (len > 0) {
+                std::vector<wchar_t> wname(len);
+                MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, wname.data(), len);
+                statusMsg += wname.data();
+            }
+            UpdateStatus(statusMsg.c_str());
+        }
+    }
+}
+
+void MainWindow::HandlePluginCardControl(int controlId, int notification) {
+    if (!activePlugins) return;
+    
+    // Decode control ID: 4000 + cardIndex * 100 + controlType
+    // 5000 + cardIndex * 100 + parameterIndex (for sliders)
+    
+    if (controlId >= 4000 && controlId < 5000) {
+        // Plugin card buttons (bypass, remove)
+        int cardIndex = (controlId - 4000) / 100;
+        int buttonType = (controlId - 4000) % 100;
+        
+        switch (buttonType) {
+            case 1: // Bypass button
+                if (notification == BN_CLICKED) {
+                    // Toggle bypass state
+                    bool currentlyBypassed = false;
+                    if (cardIndex < static_cast<int>(activePlugins->GetPluginCount())) {
+                        const auto& plugins = activePlugins->GetPlugins();
+                        currentlyBypassed = plugins[cardIndex].bypassed;
+                        activePlugins->BypassPlugin(cardIndex, !currentlyBypassed);
+                        
+                        std::wstring statusMsg = currentlyBypassed ? L"Activated plugin: " : L"Bypassed plugin: ";
+                        const std::string& name = plugins[cardIndex].plugin.name;
+                        int len = MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, nullptr, 0);
+                        if (len > 0) {
+                            std::vector<wchar_t> wname(len);
+                            MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, wname.data(), len);
+                            statusMsg += wname.data();
+                        }
+                        UpdateStatus(statusMsg.c_str());
+                    }
+                }
+                break;
+                
+            case 2: // Remove button
+                if (notification == BN_CLICKED) {
+                    if (cardIndex < static_cast<int>(activePlugins->GetPluginCount())) {
+                        const std::string& name = activePlugins->GetPlugins()[cardIndex].plugin.name;
+                        activePlugins->RemovePlugin(cardIndex);
+                        
+                        std::wstring statusMsg = L"Removed plugin card: ";
+                        int len = MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, nullptr, 0);
+                        if (len > 0) {
+                            std::vector<wchar_t> wname(len);
+                            MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, wname.data(), len);
+                            statusMsg += wname.data();
+                        }
+                        UpdateStatus(statusMsg.c_str());
+                    }
+                }
+                break;
+        }
+    }
+    else if (controlId >= 5000 && controlId < 6000) {
+        // Parameter sliders
+        int cardIndex = (controlId - 5000) / 100;
+        int paramIndex = (controlId - 5000) % 100;
+        
+        if (notification == TB_THUMBPOSITION || notification == TB_ENDTRACK) {
+            // Get slider position and update parameter
+            HWND hSlider = GetDlgItem(hWnd, controlId);
+            if (hSlider) {
+                int pos = static_cast<int>(SendMessage(hSlider, TBM_GETPOS, 0, 0));
+                float value = static_cast<float>(pos); // Simple 0-100 range for now
+                
+                activePlugins->UpdateParameterValue(cardIndex, paramIndex, value);
+                
+                std::wstring statusMsg = L"Updated parameter ";
+                statusMsg += std::to_wstring(paramIndex + 1);
+                statusMsg += L" to ";
+                statusMsg += std::to_wstring(static_cast<int>(value));
+                UpdateStatus(statusMsg.c_str());
+            }
+        }
     }
 }

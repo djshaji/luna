@@ -6,6 +6,7 @@
 
 class LV2Host;
 class PluginList;
+class ActivePlugins;
 
 class MainWindow {
 public:
@@ -26,6 +27,8 @@ private:
     void ToggleAudio();
     void UpdateAudioButton();
     void UpdateStatus(const wchar_t* message);
+    void OnPluginListDoubleClick();
+    void HandlePluginCardControl(int controlId, int notification);
     
     HINSTANCE hInstance;
     HWND hWnd;
@@ -36,9 +39,12 @@ private:
     
     std::unique_ptr<LV2Host> lv2Host;
     std::unique_ptr<PluginList> pluginList;
+    std::unique_ptr<ActivePlugins> activePlugins;
     
     static const wchar_t* CLASS_NAME;
     static const int ID_AUDIO_TOGGLE = 1001;
+    static const int ID_PLUGIN_LIST = 2000;
+    static const int ID_CLEAR_ALL = 3000;
 };
 
 #endif // MAIN_WINDOW_H

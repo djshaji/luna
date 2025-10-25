@@ -7,10 +7,22 @@
 #include <memory>
 #include <lilv/lilv.h>
 
+struct PluginParameter {
+    std::string name;
+    std::string symbol;
+    float min_value;
+    float max_value;
+    float default_value;
+    float current_value;
+    bool is_input;
+    bool is_control;
+};
+
 struct PluginInfo {
     std::string uri;
     std::string name;
     std::string bundle_path;
+    std::vector<PluginParameter> parameters;
 };
 
 class PluginManager {

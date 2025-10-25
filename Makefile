@@ -39,6 +39,7 @@ SOURCES = $(SRCDIR)/main.cpp \
           $(SRCDIR)/plugin_manager.cpp \
           $(SRCDIR)/gui/main_window.cpp \
           $(SRCDIR)/gui/plugin_list.cpp \
+          $(SRCDIR)/gui/active_plugins.cpp \
           $(SRCDIR)/gui/controls.cpp
 
 OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(BUILD_DIR)/%.o)
