@@ -21,19 +21,26 @@ MainWindow::~MainWindow() {
 bool MainWindow::Create() {
     std::cout << "Registering window class..." << std::endl;
     
-    // Register window class
-    WNDCLASS wc = {};
+    // Validate hInstance
+    if (!hInstance) {
+        std::cout << "Error: Invalid hInstance" << std::endl;
+        return false;
+    }
+    
+    // Register window class using explicit Unicode version
+    WNDCLASSW wc = {};
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = CLASS_NAME;
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.style = CS_HREDRAW | CS_VREDRAW; // Add standard class styles
     
-    if (!RegisterClass(&wc)) {
+    if (!RegisterClassW(&wc)) {
         // Check if the class is already registered (this is okay)
         DWORD error = GetLastError();
-        std::cout << "RegisterClass failed with error: " << error << std::endl;
+        std::cout << "RegisterClassW failed with error: " << error << std::endl;
         if (error != ERROR_CLASS_ALREADY_EXISTS) {
             return false;
         }
@@ -42,31 +49,67 @@ bool MainWindow::Create() {
         std::cout << "Window class registered successfully" << std::endl;
     }
     
-    // Create window
-    std::cout << "Creating window with CreateWindowEx..." << std::endl;
-    hWnd = CreateWindowEx(
-        0,
-        CLASS_NAME,
-        L"Luna LV2 Host",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT,
-        1024, 768,
-        nullptr,
-        nullptr,
-        hInstance,
-        this
+    // Verify the class exists by trying to get its info
+    WNDCLASSW testClass = {};
+    if (GetClassInfoW(hInstance, CLASS_NAME, &testClass)) {
+        std::cout << "Window class verification successful" << std::endl;
+    } else {
+        std::cout << "Warning: Cannot verify window class registration" << std::endl;
+    }
+    
+    // Create window using explicit Unicode version
+    std::cout << "Creating window with CreateWindowExW..." << std::endl;
+    std::cout << "Class name: LunaLV2Host" << std::endl;
+    std::cout << "hInstance: " << hInstance << std::endl;
+    
+    // Clear any previous errors
+    SetLastError(0);
+    
+    hWnd = CreateWindowExW(
+        0,                          // dwExStyle
+        CLASS_NAME,                 // lpClassName
+        L"Luna LV2 Host",          // lpWindowName
+        WS_OVERLAPPEDWINDOW,       // dwStyle
+        CW_USEDEFAULT,             // X
+        CW_USEDEFAULT,             // Y
+        1024,                      // nWidth
+        768,                       // nHeight
+        nullptr,                   // hWndParent
+        nullptr,                   // hMenu
+        hInstance,                 // hInstance
+        nullptr                    // lpParam - don't pass 'this' initially
     );
     
     if (!hWnd) {
         DWORD error = GetLastError();
-        std::cout << "CreateWindowEx failed with error: " << error << std::endl;
+        std::cout << "CreateWindowExW failed with error: " << error << std::endl;
+        
+        // Provide more specific error information
+        switch (error) {
+            case 1400: // ERROR_INVALID_WINDOW_HANDLE
+                std::cout << "ERROR_INVALID_WINDOW_HANDLE - Invalid parameter or class not found" << std::endl;
+                break;
+            case 1407: // ERROR_CANNOT_FIND_WND_CLASS
+                std::cout << "ERROR_CANNOT_FIND_WND_CLASS - Window class not registered" << std::endl;
+                break;
+            case 8: // ERROR_NOT_ENOUGH_MEMORY
+                std::cout << "ERROR_NOT_ENOUGH_MEMORY - Insufficient memory" << std::endl;
+                break;
+            default:
+                std::cout << "Unknown error code" << std::endl;
+                break;
+        }
+        
         wchar_t errorMsg[512];
-        swprintf(errorMsg, 512, L"CreateWindowEx failed. Error code: %lu", error);
-        MessageBox(nullptr, errorMsg, L"Window Creation Error", MB_OK | MB_ICONERROR);
+        swprintf(errorMsg, 512, L"CreateWindowExW failed. Error code: %lu\nCheck console for details.", error);
+        MessageBoxW(nullptr, errorMsg, L"Window Creation Error", MB_OK | MB_ICONERROR);
         return false;
     }
     
-    std::cout << "Window created successfully" << std::endl;
+    std::cout << "Window created successfully, handle: " << hWnd << std::endl;
+    
+    // Set up window user data manually since we didn't pass 'this' in CreateWindowEx
+    SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
     
     // Initialize LV2 host (non-blocking - allow window to show even if this fails)
     bool lv2InitSuccess = lv2Host->Initialize();
@@ -89,15 +132,7 @@ void MainWindow::Show(int nCmdShow) {
 }
 
 LRESULT CALLBACK MainWindow::WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    MainWindow* pThis = nullptr;
-    
-    if (uMsg == WM_NCCREATE) {
-        CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
-        pThis = reinterpret_cast<MainWindow*>(pCreate->lpCreateParams);
-        SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
-    } else {
-        pThis = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-    }
+    MainWindow* pThis = reinterpret_cast<MainWindow*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
     
     if (pThis) {
         return pThis->HandleMessage(uMsg, wParam, lParam);

@@ -44,10 +44,23 @@ if defined missing_dlls (
 )
 
 echo.
-echo All files appear to be present. Attempting to run Luna...
+echo All files appear to be present. Running diagnostics...
 echo.
+
+if exist simple_test.exe (
+    echo ================================
+    echo Step 1: Testing basic window creation...
+    echo ================================
+    echo.
+    simple_test.exe
+    echo.
+    echo If the simple test failed, there's a fundamental Windows API issue.
+    echo If it succeeded, the problem is specific to Luna's implementation.
+    echo.
+)
+
 echo ================================
-echo Running luna_debug.exe for detailed output...
+echo Step 2: Running Luna debug version...
 echo ================================
 echo.
 
